@@ -15,6 +15,13 @@ if not DATABASE_URL:
     local_database = Path(__file__).resolve().parent / "inkvoid.db"
     DATABASE_URL = f"sqlite:///{local_database.as_posix()}"
 
+# SQLAlchemy 2.1 defaults plain PostgreSQL URLs to psycopg (v3).
+# INKVOID ships psycopg2-binary, so select that driver explicitly.
+if DATABASE_URL.startswith("postgres://"):
+    DATABASE_URL = DATABASE_URL.replace("postgres://", "postgresql+psycopg2://", 1)
+elif DATABASE_URL.startswith("postgresql://"):
+    DATABASE_URL = DATABASE_URL.replace("postgresql://", "postgresql+psycopg2://", 1)
+
 engine_options = {
     "pool_pre_ping": True,
 }

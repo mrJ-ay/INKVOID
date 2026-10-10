@@ -6,5 +6,5 @@ pwdlib[argon2]
 bcrypt
 python-multipart
 psycopg2-binary
-supabase
+boto3
 python-dotenv

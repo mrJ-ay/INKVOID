@@ -15,7 +15,7 @@ The local database is created as `backend/inkvoid.db` and is ignored by Git. Exi
 
 ## Neon
 
-Set `DATABASE_URL` to the connection string for the INKVOID Neon project. Keep the connection string and `SECRET_KEY` in the hosting provider's secret environment variables. Never commit them or place them in frontend files. The `inkvoid-images` object storage bucket is currently private and is not yet wired into the app's image upload flow.
+Set `DATABASE_URL` to the connection string for the INKVOID Neon project. Keep the connection string, `SECRET_KEY`, and Neon Object Storage credentials in the backend host's secret environment variables. Never commit them or place them in frontend files. The private `inkvoid-images` bucket stores story banners; the API returns short-lived signed image URLs so the bucket can remain private. Uploads accept JPG, PNG, WEBP, and GIF files up to 5 MB.
 
 ## GitHub
 

@@ -1,9 +1,9 @@
 import json
 import os
+import boto3
 import uuid
 
 from datetime import datetime, timedelta, timezone
-from pathlib import Path
 
 from fastapi import (
     FastAPI,
@@ -19,14 +19,15 @@ from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from pydantic import BaseModel
 
 from sqlalchemy import text
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
+from botocore.config import Config
 from jose import jwt
 from pwdlib import PasswordHash
-from supabase import create_client
 
 from database import SessionLocal, engine
-from models import Base, User, Article, Comment
+from models import Base, User, Article, Comment, Like
 
 
 # =========================================================
@@ -117,32 +118,6 @@ if not SECRET_KEY:
 ALGORITHM = "HS256"
 
 ACCESS_TOKEN_EXPIRE_MINUTES = 60 * 24 * 7
-
-
-# =========================================================
-# SUPABASE
-# =========================================================
-
-SUPABASE_URL = os.getenv(
-    "SUPABASE_URL"
-)
-
-SUPABASE_SERVICE_ROLE_KEY = os.getenv(
-    "SUPABASE_SERVICE_ROLE_KEY"
-)
-
-
-supabase = None
-
-
-if (
-    SUPABASE_URL
-    and SUPABASE_SERVICE_ROLE_KEY
-):
-    supabase = create_client(
-        SUPABASE_URL,
-        SUPABASE_SERVICE_ROLE_KEY,
-    )
 
 
 # =========================================================
@@ -609,108 +584,85 @@ def me(
 
 
 # =========================================================
+# NEON OBJECT STORAGE
+# =========================================================
+
+STORAGE_BUCKET = os.getenv("NEON_STORAGE_BUCKET", "inkvoid-images")
+
+
+def get_storage_client():
+    endpoint = os.getenv("AWS_ENDPOINT_URL_S3")
+    if not endpoint or not os.getenv("AWS_ACCESS_KEY_ID") or not os.getenv("AWS_SECRET_ACCESS_KEY"):
+        raise HTTPException(status_code=503, detail="Neon 이미지 저장소 설정이 없습니다.")
+    return boto3.client(
+        "s3",
+        endpoint_url=endpoint,
+        region_name=os.getenv("AWS_REGION", "ap-southeast-1"),
+        aws_access_key_id=os.getenv("AWS_ACCESS_KEY_ID"),
+        aws_secret_access_key=os.getenv("AWS_SECRET_ACCESS_KEY"),
+        config=Config(signature_version="s3v4", s3={"addressing_style": "path"}),
+    )
+
+
+def create_banner_url(key: str | None):
+    if not key:
+        return None
+    try:
+        return get_storage_client().generate_presigned_url(
+            "get_object",
+            Params={"Bucket": STORAGE_BUCKET, "Key": key},
+            ExpiresIn=3600,
+        )
+    except Exception as error:
+        print("NEON IMAGE URL ERROR:", error)
+        return None
+
+
+# =========================================================
 # IMAGE UPLOAD
 # =========================================================
 
 @app.post("/upload-image")
 async def upload_image(
     file: UploadFile = File(...),
-    current_user: User = Depends(
-        get_current_user
-    ),
+    current_user: User = Depends(get_current_user),
 ):
-
-    if supabase is None:
-
-        raise HTTPException(
-            status_code=500,
-            detail="Supabase Storage가 설정되지 않았습니다.",
-        )
-
-    if not file.content_type:
-
-        raise HTTPException(
-            status_code=400,
-            detail="파일 형식을 확인할 수 없습니다.",
-        )
-
-    if not file.content_type.startswith(
-        "image/"
-    ):
-
-        raise HTTPException(
-            status_code=400,
-            detail="이미지 파일만 업로드할 수 있습니다.",
-        )
-
-    contents = await file.read()
-
-    if not contents:
-
-        raise HTTPException(
-            status_code=400,
-            detail="빈 파일입니다.",
-        )
-
-    extension = Path(
-        file.filename or ""
-    ).suffix.lower()
-
+    allowed_types = {
+        "image/jpeg": "jpg",
+        "image/png": "png",
+        "image/webp": "webp",
+        "image/gif": "gif",
+    }
+    extension = allowed_types.get(file.content_type or "")
     if not extension:
-        extension = ".jpg"
+        raise HTTPException(status_code=400, detail="JPG, PNG, WEBP, GIF 이미지 파일만 업로드할 수 있습니다.")
 
-    filename = (
-        f"{uuid.uuid4().hex}"
-        f"{extension}"
-    )
+    contents = await file.read(5 * 1024 * 1024 + 1)
+    if not contents:
+        raise HTTPException(status_code=400, detail="빈 파일입니다.")
+    if len(contents) > 5 * 1024 * 1024:
+        raise HTTPException(status_code=413, detail="이미지는 5MB 이하로 업로드해 주세요.")
 
-    bucket_name = os.getenv(
-        "SUPABASE_STORAGE_BUCKET",
-        "inkvoid-images",
-    )
-
+    key = f"banners/{current_user.id}/{uuid.uuid4().hex}.{extension}"
     try:
-
-        supabase.storage.from_(
-            bucket_name
-        ).upload(
-            filename,
-            contents,
-            {
-                "content-type":
-                    file.content_type,
-                "upsert": "false",
-            },
+        client = get_storage_client()
+        client.put_object(
+            Bucket=STORAGE_BUCKET,
+            Key=key,
+            Body=contents,
+            ContentType=file.content_type,
+            CacheControl="private, max-age=3600",
         )
-
-        public_url = (
-            supabase.storage
-            .from_(bucket_name)
-            .get_public_url(
-                filename
-            )
-        )
-
         return {
-            "message":
-                "이미지가 업로드되었습니다.",
-            "image":
-                public_url,
-            "image_url":
-                public_url,
+            "message": "배너 이미지가 업로드되었습니다.",
+            "image": key,
+            "banner_url": create_banner_url(key),
         }
-
+    except HTTPException:
+        raise
     except Exception as error:
-
-        print(
-            "IMAGE UPLOAD ERROR:",
-            error
-        )
-
-        raise HTTPException(
-            status_code=500,
-            detail="이미지 업로드에 실패했습니다.",
-        )
+        print("NEON IMAGE UPLOAD ERROR:", error)
+        raise HTTPException(status_code=500, detail="배너 이미지 업로드에 실패했습니다.")
 
 
 # =========================================================
@@ -734,6 +686,7 @@ def serialize_article(article: Article):
         "date": article.date,
         "content": article.content,
         "image": article.image,
+        "banner_url": create_banner_url(article.image),
         "owner_id": article.owner_id,
         "created_at": article.created_at,
         "updated_at": article.updated_at,
@@ -799,18 +752,7 @@ def get_article(
             detail="기사를 찾을 수 없습니다.",
         )
 
-    return {
-        "id": article.id,
-        "title": article.title,
-        "subtitle": article.subtitle,
-        "author": article.author,
-        "date": article.date,
-        "content": article.content,
-        "image": article.image,
-        "owner_id": article.owner_id,
-        "created_at": article.created_at,
-        "updated_at": article.updated_at,
-    }
+    return serialize_article(article)
 
 
 # =========================================================
@@ -825,6 +767,9 @@ def create_article(
     ),
     db: Session = Depends(get_db),
 ):
+
+    if request.image and not request.image.startswith(f"banners/{current_user.id}/"):
+        raise HTTPException(status_code=403, detail="다른 계정의 배너 이미지는 연결할 수 없습니다.")
 
     # -----------------------------------------------------
     # 금지어 검사
@@ -934,6 +879,9 @@ def update_article(
             detail="수정 권한이 없습니다.",
         )
 
+    if request.image and not request.image.startswith(f"banners/{current_user.id}/"):
+        raise HTTPException(status_code=403, detail="다른 계정의 배너 이미지는 연결할 수 없습니다.")
+
     # -----------------------------------------------------
     # 금지어 검사
     # -----------------------------------------------------
@@ -1030,6 +978,8 @@ def delete_article(
     ).delete(
         synchronize_session=False
     )
+
+    db.query(Like).filter(Like.article_id == article_id).delete(synchronize_session=False)
 
     db.delete(article)
 
@@ -1282,6 +1232,81 @@ def delete_comment(
     return {
         "message": "댓글이 삭제되었습니다."
     }
+
+
+# =========================================================
+# ARTICLE LIKES
+# =========================================================
+
+@app.get("/articles/{article_id}/likes")
+def get_article_likes(
+    article_id: int,
+    db: Session = Depends(get_db),
+):
+    article = db.query(Article).filter(Article.id == article_id).first()
+    if not article or not article_is_public(article):
+        raise HTTPException(status_code=404, detail="작품을 찾을 수 없습니다.")
+    count = db.query(Like).filter(Like.article_id == article_id).count()
+    return {"count": count}
+
+
+@app.get("/articles/{article_id}/likes/me")
+def get_my_article_like(
+    article_id: int,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    article = db.query(Article).filter(Article.id == article_id).first()
+    if not article or not article_is_public(article):
+        raise HTTPException(status_code=404, detail="작품을 찾을 수 없습니다.")
+    liked = db.query(Like).filter(
+        Like.article_id == article_id,
+        Like.owner_id == current_user.id,
+    ).first() is not None
+    return {"liked": liked}
+
+
+@app.post("/articles/{article_id}/likes")
+def like_article(
+    article_id: int,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    article = db.query(Article).filter(Article.id == article_id).first()
+    if not article or not article_is_public(article):
+        raise HTTPException(status_code=404, detail="작품을 찾을 수 없습니다.")
+
+    existing = db.query(Like).filter(
+        Like.article_id == article_id,
+        Like.owner_id == current_user.id,
+    ).first()
+    if not existing:
+        db.add(Like(article_id=article_id, owner_id=current_user.id))
+        try:
+            db.commit()
+        except IntegrityError:
+            db.rollback()
+    count = db.query(Like).filter(Like.article_id == article_id).count()
+    return {"liked": True, "count": count}
+
+
+@app.delete("/articles/{article_id}/likes")
+def unlike_article(
+    article_id: int,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    article = db.query(Article).filter(Article.id == article_id).first()
+    if not article or not article_is_public(article):
+        raise HTTPException(status_code=404, detail="작품을 찾을 수 없습니다.")
+
+    db.query(Like).filter(
+        Like.article_id == article_id,
+        Like.owner_id == current_user.id,
+    ).delete(synchronize_session=False)
+    db.commit()
+    count = db.query(Like).filter(Like.article_id == article_id).count()
+    return {"liked": False, "count": count}
 
 
 # =========================================================
@@ -1776,6 +1801,8 @@ def admin_delete_article(
         synchronize_session=False
     )
 
+    db.query(Like).filter(Like.article_id == article_id).delete(synchronize_session=False)
+
     db.delete(article)
 
     db.commit()
@@ -1809,6 +1836,8 @@ def admin_delete_all_articles(
     db.query(Comment).delete(
         synchronize_session=False
     )
+
+    db.query(Like).delete(synchronize_session=False)
 
     db.query(Article).delete(
         synchronize_session=False

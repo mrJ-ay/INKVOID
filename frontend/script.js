@@ -93,7 +93,7 @@ function renderExplore() {
   }
   grid.innerHTML = filtered.map((work, index) => {
     const total = work.chapters.reduce((sum, chapter) => sum + (chapter.body || "").length, 0);
-    return `<article class="work-card" onclick="openReader(${Number(work.id)})"><div class="work-cover cover-${index % 5 + 1}"></div><h3>${escapeHtml(work.title || "제목 없는 작품")}</h3><p>${escapeHtml(work.summary || "작가가 아직 소개를 적지 않았어요.")}</p><div class="work-meta"><strong>${work.chapters.length}회차 · ${total.toLocaleString()}자</strong><span>${escapeHtml(work.author || "작가 미상")}</span></div></article>`;
+    return `<article class="work-card" onclick="openReader(${Number(work.id)})"><div class="work-cover cover-${index % 5 + 1}" style="${work.banner_url ? `background-image:url(&quot;${escapeHtml(work.banner_url)}&quot;)` : ""}"></div><h3>${escapeHtml(work.title || "제목 없는 작품")}</h3><p>${escapeHtml(work.summary || "작가가 아직 소개를 적지 않았어요.")}</p><div class="work-meta"><strong>${work.chapters.length}회차 · ${total.toLocaleString()}자</strong><span>${escapeHtml(work.author || "작가 미상")}</span></div></article>`;
   }).join("");
 }
 
@@ -105,9 +105,108 @@ function openReader(id) {
   $("readerAuthor").textContent = readingWork.author ? `BY ${readingWork.author}` : "INKVOID STORY";
   $("readerSummary").textContent = readingWork.summary || "";
   renderReaderChapter();
+  renderReaderBanner();
   showPage("readerPage");
+  loadLikes(readingWork.id);
+  loadComments(readingWork.id);
 }
 
+function renderReaderBanner() {
+  const banner = $("readerBanner");
+  banner.hidden = !readingWork?.banner_url;
+  banner.style.backgroundImage = readingWork?.banner_url ? `url(${JSON.stringify(readingWork.banner_url)})` : "";
+}
+
+async function loadLikes(articleId) {
+  try {
+    const result = await request(`/articles/${articleId}/likes`);
+    let liked = false;
+    if (token()) {
+      try { liked = (await request(`/articles/${articleId}/likes/me`)).liked === true; } catch {}
+    }
+    const button = $("likeButton");
+    button.dataset.liked = liked ? "true" : "false";
+    button.classList.toggle("liked", liked);
+    button.innerHTML = `${liked ? "♥" : "♡"} 좋아요 <span id="likeCount">${Number(result.count || 0).toLocaleString()}</span>`;
+  } catch (error) { notify(error.message); }
+}
+
+async function toggleLike() {
+  if (!readingWork) return;
+  if (!token()) { showLogin(); notify("좋아요는 로그인 후 누를 수 있어요."); return; }
+  const liked = $("likeButton").dataset.liked === "true";
+  try {
+    const result = await request(`/articles/${readingWork.id}/likes`, { method: liked ? "DELETE" : "POST" });
+    const button = $("likeButton");
+    button.dataset.liked = result.liked ? "true" : "false";
+    button.classList.toggle("liked", result.liked);
+    button.innerHTML = `${result.liked ? "♥" : "♡"} 좋아요 <span id="likeCount">${Number(result.count || 0).toLocaleString()}</span>`;
+  } catch (error) { notify(error.message); }
+}
+
+async function loadComments(articleId) {
+  const list = $("commentList");
+  try {
+    const comments = await request(`/articles/${articleId}/comments`);
+    $("commentCount").textContent = String(comments.length);
+    if (!comments.length) {
+      list.innerHTML = '<p class="empty-state">첫 댓글을 남겨 이야기를 함께 나눠보세요.</p>';
+      return;
+    }
+    list.innerHTML = comments.map(comment => {
+      const canDelete = currentUser && (Number(currentUser.id) === Number(comment.owner_id) || currentUser.is_admin === 1);
+      const date = comment.created_at ? new Date(comment.created_at).toLocaleDateString("ko-KR") : "";
+      return `<article class="comment"><div class="comment-meta"><strong>${escapeHtml(comment.nickname)}</strong><time>${escapeHtml(date)}</time>${canDelete ? `<button class="comment-delete" onclick="deleteComment(${Number(comment.id)})">삭제</button>` : ""}</div><p>${escapeHtml(comment.content)}</p></article>`;
+    }).join("");
+  } catch (error) { list.innerHTML = '<p class="empty-state">댓글을 불러오지 못했어요.</p>'; notify(error.message); }
+}
+
+async function submitComment() {
+  if (!readingWork) return;
+  if (!token()) { showLogin(); notify("댓글은 로그인 후 남길 수 있어요."); return; }
+  const content = $("commentInput").value.trim();
+  if (!content) { notify("댓글 내용을 적어주세요."); return; }
+  try {
+    await request(`/articles/${readingWork.id}/comments`, { method: "POST", body: JSON.stringify({ content }) });
+    $("commentInput").value = "";
+    await loadComments(readingWork.id);
+    notify("댓글을 남겼어요.");
+  } catch (error) { notify(error.message); }
+}
+
+async function deleteComment(commentId) {
+  if (!window.confirm("이 댓글을 삭제할까요?")) return;
+  try {
+    await request(`/comments/${commentId}`, { method: "DELETE" });
+    await loadComments(readingWork.id);
+    notify("댓글을 삭제했어요.");
+  } catch (error) { notify(error.message); }
+}
+
+function renderBannerPreview() {
+  const preview = $("bannerPreview");
+  if (!preview) return;
+  preview.style.backgroundImage = currentWork?.banner_url ? `url(${JSON.stringify(currentWork.banner_url)})` : "";
+  preview.classList.toggle("has-image", Boolean(currentWork?.banner_url));
+}
+
+async function uploadBanner(file) {
+  if (!file || !currentWork) return;
+  if (file.size > 5 * 1024 * 1024) { notify("배너 이미지는 5MB 이하로 올려주세요."); return; }
+  const form = new FormData();
+  form.append("file", file);
+  try {
+    const headers = token() ? { Authorization: `Bearer ${token()}` } : {};
+    const response = await fetch(`${API_URL}/upload-image`, { method: "POST", headers, body: form });
+    const result = await response.json().catch(() => ({}));
+    if (!response.ok) throw new Error(result.detail || "배너 업로드에 실패했어요.");
+    currentWork.image = result.image;
+    currentWork.banner_url = result.banner_url;
+    renderBannerPreview();
+    queueSave();
+    notify("배너 이미지를 올렸어요.");
+  } catch (error) { notify(error.message); }
+}
 function renderReaderChapter() {
   if (!readingWork) return;
   const index = readingWork.chapters.findIndex(chapter => chapter.id === readingChapterId);
@@ -145,12 +244,12 @@ function renderLibrary() {
   grid.innerHTML = filtered.map((work, index) => {
     const total = work.chapters.reduce((sum, chapter) => sum + (chapter.body || "").length, 0);
     const date = work.updated_at ? new Date(work.updated_at).toLocaleDateString("ko-KR", { year:"numeric", month:"long", day:"numeric" }) : "방금 작성";
-    return `<article class="work-card" onclick="openWork(${Number(work.id)})"><div class="work-cover cover-${index % 5 + 1}"></div><h3>${escapeHtml(work.title || "제목 없는 작품")}</h3><p>${escapeHtml(work.summary || "아직 소개가 없어요.")}</p><div class="work-meta"><strong>${work.chapters.length}회차 · ${total.toLocaleString()}자</strong><span class="visibility-tag ${work.isPublic ? "published" : "draft"}">${work.isPublic ? "공개" : "초안"}</span><span>${escapeHtml(date)}</span></div></article>`;
+    return `<article class="work-card" onclick="openWork(${Number(work.id)})"><div class="work-cover cover-${index % 5 + 1}" style="${work.banner_url ? `background-image:url(&quot;${escapeHtml(work.banner_url)}&quot;)` : ""}"></div><h3>${escapeHtml(work.title || "제목 없는 작품")}</h3><p>${escapeHtml(work.summary || "아직 소개가 없어요.")}</p><div class="work-meta"><strong>${work.chapters.length}회차 · ${total.toLocaleString()}자</strong><span class="visibility-tag ${work.isPublic ? "published" : "draft"}">${work.isPublic ? "공개" : "초안"}</span><span>${escapeHtml(date)}</span></div></article>`;
   }).join("");
 }
 
 function freshWork(title) {
-  return { id: null, title, summary: "", author: currentUser?.nickname || "", date: new Date().toISOString().slice(0, 10), chapters: [{ id: makeId(), title: "첫 번째 장", body: "" }], isNovel: true, isPublic: false };
+  return { id: null, title, summary: "", author: currentUser?.nickname || "", date: new Date().toISOString().slice(0, 10), chapters: [{ id: makeId(), title: "첫 번째 장", body: "" }], isNovel: true, isPublic: false, image: null, banner_url: null };
 }
 
 async function newWork() {
@@ -189,6 +288,8 @@ function openEditor() {
   showPage("editorPage");
   $("workTitle").value = currentWork.title || "";
   $("workPublicToggle").checked = currentWork.isPublic === true;
+  renderBannerPreview();
+  $("bannerFile").value = "";
   $("workSummary").value = currentWork.summary || "";
   renderChapters();
   renderActiveChapter();
@@ -257,7 +358,7 @@ async function saveWork(manual) {
   if (isSaving) { queuedSave = true; return; }
   isSaving = true;
   try {
-    await request(`/articles/${currentWork.id}`, { method:"PUT", body:JSON.stringify({ title:currentWork.title.trim() || "제목 없는 작품", subtitle:currentWork.summary || "", author:currentWork.author || currentUser?.nickname || "", date:new Date().toISOString().slice(0, 10), content:encodeWork(currentWork) }) });
+    await request(`/articles/${currentWork.id}`, { method:"PUT", body:JSON.stringify({ title:currentWork.title.trim() || "제목 없는 작품", subtitle:currentWork.summary || "", author:currentWork.author || currentUser?.nickname || "", date:new Date().toISOString().slice(0, 10), content:encodeWork(currentWork), image:currentWork.image || null }) });
     currentWork.updated_at = new Date().toISOString();
     const index = works.findIndex(item => Number(item.id) === Number(currentWork.id));
     if (index >= 0) works[index] = JSON.parse(JSON.stringify(currentWork));
@@ -328,6 +429,7 @@ document.addEventListener("DOMContentLoaded", async () => {
     $(id).addEventListener("input", () => { updateWordCount(); queueSave(); });
   });
   $("loginPassword").addEventListener("keydown", event => { if (event.key === "Enter") login(); });
+  $("bannerFile").addEventListener("change", event => uploadBanner(event.target.files?.[0]));
   $("workPublicToggle").addEventListener("change", () => {
     if (!currentWork) return;
     currentWork.isPublic = $("workPublicToggle").checked;
@@ -339,4 +441,4 @@ document.addEventListener("DOMContentLoaded", async () => {
   showExplore();
 });
 
-Object.assign(window, { showExplore, showLibrary, showLogin, newWork, openWork, selectChapter, addChapter, saveWork, openReader, selectReaderChapter, moveChapter, login, registerUser, logout });
+Object.assign(window, { showExplore, showLibrary, showLogin, newWork, openWork, selectChapter, addChapter, saveWork, openReader, selectReaderChapter, moveChapter, toggleLike, submitComment, deleteComment, login, registerUser, logout, uploadBanner });

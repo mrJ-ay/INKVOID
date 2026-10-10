@@ -38,7 +38,7 @@ function notify(message) {
 }
 
 function showPage(id) {
-  ["explorePage", "libraryPage", "editorPage", "loginPage", "readerPage"].forEach(page => $(page).hidden = page !== id);
+  ["explorePage", "libraryPage", "editorPage", "loginPage", "readerPage", "adminPage"].forEach(page => $(page).hidden = page !== id);
   $("exploreNav").classList.toggle("active", id === "explorePage");
   $("libraryNav").classList.toggle("active", id === "libraryPage");
 }
@@ -55,6 +55,113 @@ function showExplore() {
 }
 
 function showLogin() { showPage("loginPage"); }
+
+async function showAdmin() {
+  if (!token()) { showLogin(); notify("관리자 로그인 후 이용할 수 있어요."); return; }
+  if (!currentUser) await checkLogin();
+  if (currentUser?.is_admin !== 1) { showExplore(); notify("관리자 권한이 있는 계정만 이용할 수 있어요."); return; }
+  showPage("adminPage");
+  await loadAdminData();
+}
+
+async function loadAdminData() {
+  if (!currentUser || currentUser.is_admin !== 1) return;
+  const notice = $("adminNotice");
+  notice.hidden = true;
+  try {
+    const [users, articles, bannedWords] = await Promise.all([
+      request("/admin/users"), request("/admin/articles"), request("/admin/banned-words")
+    ]);
+    $("adminUserCount").textContent = users.length.toLocaleString();
+    $("adminArticleCount").textContent = articles.length.toLocaleString();
+    const publicArticles = articles.filter(article => {
+      try { return JSON.parse(article.content || "{}").is_public === true; } catch { return false; }
+    }).length;
+    $("adminPublicCount").textContent = publicArticles.toLocaleString();
+    $("adminBannedCount").textContent = bannedWords.length.toLocaleString();
+    renderAdminUsers(users);
+    renderAdminArticles(articles);
+    renderAdminBannedWords(bannedWords);
+  } catch (error) {
+    notice.textContent = error.message.includes("관리자") ? "관리자 권한이 확인되지 않아요. 다시 로그인한 뒤 확인해 주세요." : `관리자 정보를 불러오지 못했어요: ${error.message}`;
+    notice.hidden = false;
+  }
+}
+
+function renderAdminUsers(users) {
+  const body = $("adminUsersBody");
+  if (!users.length) { body.innerHTML = '<tr><td colspan="5">가입 회원이 없습니다.</td></tr>'; return; }
+  body.innerHTML = users.map(user => {
+    const self = Number(user.id) === Number(currentUser.id);
+    const date = user.created_at ? new Date(user.created_at).toLocaleDateString("ko-KR") : "—";
+    const status = user.is_banned ? '<span class="admin-badge blocked">정지</span>' : user.is_admin ? '<span class="admin-badge admin">관리자</span>' : '<span class="admin-badge">일반</span>';
+    const roleButton = user.is_admin
+      ? `<button class="admin-action muted" ${self ? "disabled title='내 관리자 권한은 여기서 해제할 수 없어요.'" : ""} onclick="adminUserAction(${Number(user.id)},'remove-admin')">관리자 해제</button>`
+      : `<button class="admin-action" onclick="adminUserAction(${Number(user.id)},'make-admin')">관리자 지정</button>`;
+    const banButton = user.is_banned
+      ? `<button class="admin-action" onclick="adminUserAction(${Number(user.id)},'unban')">정지 해제</button>`
+      : `<button class="admin-action danger" ${self ? "disabled title='내 계정은 정지할 수 없어요.'" : ""} onclick="adminUserAction(${Number(user.id)},'ban')">계정 정지</button>`;
+    return `<tr><td>#${Number(user.id)}</td><td><strong>${escapeHtml(user.nickname)}</strong>${self ? ' <small>(나)</small>' : ""}</td><td>${escapeHtml(date)}</td><td>${status}</td><td><div class="admin-row-actions">${roleButton}${banButton}</div></td></tr>`;
+  }).join("");
+}
+
+function renderAdminArticles(articles) {
+  const body = $("adminArticlesBody");
+  if (!articles.length) { body.innerHTML = '<tr><td colspan="6">등록된 작품이 없습니다.</td></tr>'; return; }
+  body.innerHTML = articles.map(article => {
+    let published = false;
+    try { published = JSON.parse(article.content || "{}").is_public === true; } catch {}
+    const date = article.created_at ? new Date(article.created_at).toLocaleDateString("ko-KR") : "—";
+    return `<tr><td>#${Number(article.id)}</td><td><strong>${escapeHtml(article.title || "제목 없는 작품")}</strong><small class="admin-subtitle">${escapeHtml(article.subtitle || "소개 없음")}</small></td><td>${escapeHtml(article.author || `회원 #${article.owner_id}`)}</td><td><span class="admin-badge ${published ? "admin" : ""}">${published ? "공개" : "초안"}</span></td><td>${escapeHtml(date)}</td><td><button class="admin-action danger" onclick="adminDeleteArticle(${Number(article.id)})">작품 삭제</button></td></tr>`;
+  }).join("");
+}
+
+function renderAdminBannedWords(words) {
+  const list = $("adminBannedWords");
+  if (!words.length) { list.innerHTML = '<p class="admin-empty">등록된 금칙어가 없습니다.</p>'; return; }
+  list.innerHTML = words.map(item => `<span class="banned-word-chip">${escapeHtml(item.word)}<button aria-label="${escapeHtml(item.word)} 삭제" onclick="adminDeleteBannedWord(${Number(item.id)},'${escapeHtml(item.word)}')">×</button></span>`).join("");
+}
+
+async function adminUserAction(userId, action) {
+  const labels = { "make-admin": "이 회원을 관리자로 지정", "remove-admin": "이 회원의 관리자 권한 해제", ban: "이 회원의 계정 정지", unban: "이 회원의 계정 정지 해제" };
+  if (!window.confirm(`${labels[action]}할까요?`)) return;
+  try {
+    const result = await request(`/admin/${action}/${userId}`, { method: "POST", body: "" });
+    notify(result.message || "회원 설정을 변경했어요.");
+    await loadAdminData();
+  } catch (error) { notify(error.message); }
+}
+
+async function adminDeleteArticle(articleId) {
+  if (!window.confirm("이 작품과 작품의 댓글·좋아요를 영구 삭제할까요?")) return;
+  try {
+    const result = await request(`/admin/articles/${articleId}`, { method: "DELETE" });
+    notify(result.message || "작품을 삭제했어요.");
+    await loadAdminData();
+  } catch (error) { notify(error.message); }
+}
+
+async function adminAddBannedWord() {
+  const input = $("adminBannedWordInput");
+  const word = input.value.trim();
+  if (!word) { notify("금칙어를 입력해 주세요."); return; }
+  if (!window.confirm(`'${word}'을(를) 금칙어로 추가할까요? 이 단어가 들어간 기존 작품은 삭제될 수 있어요.`)) return;
+  try {
+    const result = await request("/admin/banned-words", { method: "POST", body: JSON.stringify({ word }) });
+    input.value = "";
+    notify(result.message || "금칙어를 추가했어요.");
+    await loadAdminData();
+  } catch (error) { notify(error.message); }
+}
+
+async function adminDeleteBannedWord(wordId, word) {
+  if (!window.confirm(`'${word}' 금칙어를 목록에서 삭제할까요?`)) return;
+  try {
+    const result = await request(`/admin/banned-words/${wordId}`, { method: "DELETE" });
+    notify(result.message || "금칙어를 삭제했어요.");
+    await loadAdminData();
+  } catch (error) { notify(error.message); }
+}
 
 function decodeWork(record) {
   let saved;
@@ -410,9 +517,11 @@ async function checkLogin() {
     $("userName").textContent = currentUser.nickname || "작가";
     $("loginButton").hidden = true;
     $("logoutButton").hidden = false;
+    $("adminNav").hidden = currentUser.is_admin !== 1;
   } catch {
     localStorage.removeItem(TOKEN_KEY);
     currentUser = null;
+    $("adminNav").hidden = true;
   }
 }
 
@@ -421,6 +530,7 @@ function logout() {
   localStorage.removeItem("inkvoid_current_user");
   currentUser = null; works = []; currentWork = null;
   $("userName").textContent = ""; $("loginButton").hidden = false; $("logoutButton").hidden = true;
+  $("adminNav").hidden = true;
   showExplore(); notify("로그아웃했어요.");
 }
 
@@ -441,4 +551,4 @@ document.addEventListener("DOMContentLoaded", async () => {
   showExplore();
 });
 
-Object.assign(window, { showExplore, showLibrary, showLogin, newWork, openWork, selectChapter, addChapter, saveWork, openReader, selectReaderChapter, moveChapter, toggleLike, submitComment, deleteComment, login, registerUser, logout, uploadBanner });
+Object.assign(window, { showExplore, showLibrary, showLogin, showAdmin, loadAdminData, adminUserAction, adminDeleteArticle, adminAddBannedWord, adminDeleteBannedWord, newWork, openWork, selectChapter, addChapter, saveWork, openReader, selectReaderChapter, moveChapter, toggleLike, submitComment, deleteComment, login, registerUser, logout, uploadBanner });

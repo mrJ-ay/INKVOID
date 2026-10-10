@@ -13,7 +13,7 @@
 <body>
   <header class="topbar">
     <a class="brand" href="#" onclick="showExplore();return false"><span class="brand-mark">IV</span><span>INKVOID</span></a>
-    <nav><button class="nav-link active" id="exploreNav" onclick="showExplore()">둘러보기</button><button class="nav-link" id="libraryNav" onclick="showLibrary()">내 서재</button><button class="nav-link" onclick="newWork()">집필하기</button></nav>
+    <nav><button class="nav-link active" id="exploreNav" onclick="showExplore()">둘러보기</button><button class="nav-link" id="libraryNav" onclick="showLibrary()">내 서재</button><button class="nav-link" onclick="newWork()">집필하기</button><button class="nav-link admin-nav" id="adminNav" onclick="showAdmin()" hidden>관리자</button></nav>
     <div class="account"><span id="userName"></span><button class="quiet-button" id="loginButton" onclick="showLogin()">로그인</button><button class="quiet-button" id="logoutButton" onclick="logout()" hidden>로그아웃</button></div>
   </header>
   <main>
@@ -51,6 +51,15 @@
     </section>
 
     <section id="loginPage" class="page login-page" hidden><button class="back-link" onclick="showExplore()">← 둘러보기</button><div class="login-card"><div class="brand-mark large">IV</div><p class="eyebrow">INKVOID WRITER</p><h1>다시, 이야기 속으로</h1><p>로그인해서 작품을 이어 써보세요.</p><label>닉네임<input id="loginNickname" maxlength="20" placeholder="닉네임"></label><label>비밀번호<input id="loginPassword" type="password" placeholder="비밀번호"></label><button class="primary-button full-button" onclick="login()">로그인</button><button class="text-button" onclick="registerUser()">계정이 없나요? 회원가입</button></div></section>
+
+    <section id="adminPage" class="page admin-page" hidden>
+      <div class="admin-heading"><div><p class="eyebrow">INKVOID CONTROL ROOM</p><h1>관리자 대시보드</h1><p>회원과 작품, 서비스 운영 규칙을 관리합니다.</p></div><button class="secondary-button" onclick="loadAdminData()">새로고침 ↻</button></div>
+      <div id="adminNotice" class="admin-notice" hidden></div>
+      <div class="admin-stats"><article><span>가입 회원</span><strong id="adminUserCount">—</strong></article><article><span>전체 작품</span><strong id="adminArticleCount">—</strong></article><article><span>공개 작품</span><strong id="adminPublicCount">—</strong></article><article><span>등록 금칙어</span><strong id="adminBannedCount">—</strong></article></div>
+      <section class="admin-panel"><div class="admin-panel-heading"><div><p class="eyebrow">COMMUNITY</p><h2>회원 관리</h2></div><span>관리자 지정과 계정 정지</span></div><div class="admin-table-wrap"><table class="admin-table"><thead><tr><th>ID</th><th>닉네임</th><th>가입일</th><th>상태</th><th>관리</th></tr></thead><tbody id="adminUsersBody"><tr><td colspan="5">불러오는 중…</td></tr></tbody></table></div></section>
+      <section class="admin-panel"><div class="admin-panel-heading"><div><p class="eyebrow">STORY ARCHIVE</p><h2>작품 관리</h2></div><span>공개·초안 전체 작품</span></div><div class="admin-table-wrap"><table class="admin-table"><thead><tr><th>ID</th><th>작품</th><th>작가</th><th>상태</th><th>등록일</th><th>관리</th></tr></thead><tbody id="adminArticlesBody"><tr><td colspan="6">불러오는 중…</td></tr></tbody></table></div></section>
+      <section class="admin-panel"><div class="admin-panel-heading"><div><p class="eyebrow">CONTENT RULES</p><h2>금칙어 관리</h2></div><span>등록된 단어는 신규 작품에 적용됩니다.</span></div><form class="banned-word-form" onsubmit="event.preventDefault();adminAddBannedWord()"><input id="adminBannedWordInput" maxlength="100" placeholder="추가할 금칙어"><button class="primary-button" type="submit">금칙어 추가</button></form><p class="admin-warning">금칙어를 추가하면 해당 단어가 포함된 기존 작품도 삭제될 수 있습니다.</p><div id="adminBannedWords" class="banned-word-list"><p class="empty-state">불러오는 중…</p></div></section>
+    </section>
   </main>
   <div id="toast" class="toast" role="status" aria-live="polite"></div>
   <script src="api-config.js"></script>

@@ -1,0 +1,970 @@
+<!DOCTYPE html>
+
+<html lang="ko">
+
+<head>
+
+    <meta charset="UTF-8">
+
+    <meta
+        name="viewport"
+        content="width=device-width, initial-scale=1.0"
+    >
+
+    <title>INKVOID ADMIN</title>
+
+
+    <style>
+
+        * {
+            box-sizing: border-box;
+        }
+
+
+        body {
+
+            margin: 0;
+
+            background:
+                #f5f6f8;
+
+            color:
+                #222;
+
+            font-family:
+                Arial,
+                "Malgun Gothic",
+                sans-serif;
+
+        }
+
+
+        header {
+
+            background:
+                #111;
+
+            color:
+                white;
+
+            padding:
+                22px 30px;
+
+            display:
+                flex;
+
+            align-items:
+                center;
+
+            justify-content:
+                space-between;
+
+        }
+
+
+        header h1 {
+
+            margin:
+                0;
+
+            font-size:
+                22px;
+
+            font-weight:
+                900;
+
+        }
+
+
+        #adminNickname {
+
+            color:
+                #bbb;
+
+            font-size:
+                13px;
+
+            font-weight:
+                700;
+
+        }
+
+
+        main {
+
+            width:
+                min(
+                    1100px,
+                    calc(
+                        100% - 32px
+                    )
+                );
+
+            margin:
+                30px auto 60px;
+
+        }
+
+
+        section {
+
+            background:
+                white;
+
+            border:
+                1px solid #e6e6e6;
+
+            border-radius:
+                14px;
+
+            padding:
+                22px;
+
+            margin-bottom:
+                20px;
+
+            box-shadow:
+                0 3px 14px
+                rgba(
+                    0,
+                    0,
+                    0,
+                    0.04
+                );
+
+        }
+
+
+        .section-header {
+
+            display:
+                flex;
+
+            align-items:
+                center;
+
+            justify-content:
+                space-between;
+
+            gap:
+                12px;
+
+            margin-bottom:
+                18px;
+
+        }
+
+
+        .section-header h2 {
+
+            margin:
+                0;
+
+            font-size:
+                18px;
+
+            font-weight:
+                900;
+
+        }
+
+
+        .section-description {
+
+            color:
+                #777;
+
+            font-size:
+                12px;
+
+            line-height:
+                1.6;
+
+            margin:
+                -8px 0 18px;
+
+        }
+
+
+        .article-row {
+
+            display:
+                flex;
+
+            align-items:
+                center;
+
+            justify-content:
+                space-between;
+
+            gap:
+                15px;
+
+            padding:
+                15px 0;
+
+            border-bottom:
+                1px solid #eee;
+
+        }
+
+
+        .article-row:last-child {
+
+            border-bottom:
+                0;
+
+        }
+
+
+        .article-info {
+
+            min-width:
+                0;
+
+            flex:
+                1;
+
+        }
+
+
+        .article-title {
+
+            font-size:
+                15px;
+
+            font-weight:
+                800;
+
+            word-break:
+                break-word;
+
+            margin-bottom:
+                6px;
+
+        }
+
+
+        .article-meta {
+
+            color:
+                #888;
+
+            font-size:
+                12px;
+
+            line-height:
+                1.5;
+
+            word-break:
+                break-word;
+
+        }
+
+
+        .empty {
+
+            margin:
+                0;
+
+            padding:
+                20px 0;
+
+            text-align:
+                center;
+
+            color:
+                #999;
+
+            font-size:
+                13px;
+
+        }
+
+
+        button {
+
+            border:
+                0;
+
+            cursor:
+                pointer;
+
+            font-family:
+                inherit;
+
+            font-weight:
+                800;
+
+            transition:
+                0.15s;
+
+        }
+
+
+        button:hover {
+
+            transform:
+                translateY(-1px);
+
+        }
+
+
+        .refresh {
+
+            background:
+                #111;
+
+            color:
+                white;
+
+            padding:
+                9px 13px;
+
+            border-radius:
+                8px;
+
+            font-size:
+                12px;
+
+        }
+
+
+        .refresh:hover {
+
+            background:
+                #333;
+
+        }
+
+
+        .ban {
+
+            background:
+                #fff1f0;
+
+            color:
+                #d92d20;
+
+            padding:
+                8px 12px;
+
+            border-radius:
+                8px;
+
+            font-size:
+                12px;
+
+        }
+
+
+        .unban {
+
+            background:
+                #ecfdf3;
+
+            color:
+                #027a48;
+
+            padding:
+                8px 12px;
+
+            border-radius:
+                8px;
+
+            font-size:
+                12px;
+
+        }
+
+
+        .admin {
+
+            background:
+                #eef4ff;
+
+            color:
+                #175cd3;
+
+            padding:
+                8px 12px;
+
+            border-radius:
+                8px;
+
+            font-size:
+                12px;
+
+        }
+
+
+        .remove-admin {
+
+            background:
+                #fff7ed;
+
+            color:
+                #c2410c;
+
+            padding:
+                8px 12px;
+
+            border-radius:
+                8px;
+
+            font-size:
+                12px;
+
+        }
+
+
+        .delete {
+
+            background:
+                #d92d20;
+
+            color:
+                white;
+
+            padding:
+                8px 12px;
+
+            border-radius:
+                8px;
+
+            font-size:
+                12px;
+
+            flex-shrink:
+                0;
+
+        }
+
+
+        .delete:hover {
+
+            background:
+                #b42318;
+
+        }
+
+
+        .delete-all-btn {
+
+            background:
+                #d92d20;
+
+            color:
+                white;
+
+            padding:
+                9px 13px;
+
+            border-radius:
+                8px;
+
+            font-size:
+                12px;
+
+        }
+
+
+        .delete-all-btn:hover {
+
+            background:
+                #b42318;
+
+        }
+
+
+        .status-admin {
+
+            color:
+                #175cd3;
+
+            font-weight:
+                800;
+
+        }
+
+
+        .status-banned {
+
+            color:
+                #d92d20;
+
+            font-weight:
+                800;
+
+        }
+
+
+        .status-normal {
+
+            color:
+                #027a48;
+
+            font-weight:
+                800;
+
+        }
+
+
+        .banned-word-form {
+
+            display:
+                flex;
+
+            gap:
+                10px;
+
+            margin-bottom:
+                15px;
+
+        }
+
+
+        .banned-word-form input {
+
+            flex:
+                1;
+
+            min-width:
+                0;
+
+            border:
+                1px solid #d5d7da;
+
+            border-radius:
+                9px;
+
+            padding:
+                11px 13px;
+
+            outline:
+                none;
+
+            font-size:
+                13px;
+
+            font-family:
+                inherit;
+
+        }
+
+
+        .banned-word-form input:focus {
+
+            border-color:
+                #111;
+
+        }
+
+
+        .add-banned-word {
+
+            background:
+                #111;
+
+            color:
+                white;
+
+            padding:
+                0 16px;
+
+            border-radius:
+                9px;
+
+            font-size:
+                12px;
+
+            white-space:
+                nowrap;
+
+        }
+
+
+        .add-banned-word:hover {
+
+            background:
+                #333;
+
+        }
+
+
+        #message {
+
+            position:
+                fixed;
+
+            left:
+                50%;
+
+            bottom:
+                25px;
+
+            transform:
+                translateX(-50%);
+
+            background:
+                #111;
+
+            color:
+                white;
+
+            padding:
+                12px 18px;
+
+            border-radius:
+                10px;
+
+            font-size:
+                13px;
+
+            font-weight:
+                700;
+
+            display:
+                none;
+
+            z-index:
+                9999;
+
+            max-width:
+                calc(
+                    100% - 30px
+                );
+
+            text-align:
+                center;
+
+            box-shadow:
+                0 8px 25px
+                rgba(
+                    0,
+                    0,
+                    0,
+                    0.2
+                );
+
+        }
+
+
+        .back {
+
+            width:
+                100%;
+
+            background:
+                #e9eaec;
+
+            color:
+                #333;
+
+            padding:
+                12px;
+
+            border-radius:
+                9px;
+
+            font-size:
+                13px;
+
+        }
+
+
+        .back:hover {
+
+            background:
+                #ddd;
+
+        }
+
+
+        @media (
+            max-width: 650px
+        ) {
+
+            header {
+
+                padding:
+                    18px;
+
+            }
+
+
+            main {
+
+                width:
+                    calc(
+                        100% - 20px
+                    );
+
+                margin-top:
+                    20px;
+
+            }
+
+
+            section {
+
+                padding:
+                    17px;
+
+            }
+
+
+            .article-row {
+
+                align-items:
+                    flex-start;
+
+                flex-direction:
+                    column;
+
+            }
+
+
+            .article-row > button {
+
+                align-self:
+                    flex-end;
+
+            }
+
+
+            .section-header {
+
+                align-items:
+                    flex-start;
+
+                flex-direction:
+                    column;
+
+            }
+
+
+            .banned-word-form {
+
+                flex-direction:
+                    column;
+
+            }
+
+
+            .add-banned-word {
+
+                padding:
+                    11px;
+
+            }
+
+        }
+
+    </style>
+
+</head>
+
+
+<body>
+
+
+<header>
+
+    <h1>
+        INKVOID ADMIN
+    </h1>
+
+    <div id="adminNickname">
+        관리자
+    </div>
+
+</header>
+
+
+<main>
+
+
+    <!-- =====================================================
+         MESSAGE
+    ====================================================== -->
+
+    <div id="message"></div>
+
+
+    <!-- =====================================================
+         USERS
+    ====================================================== -->
+
+    <section>
+
+        <div class="section-header">
+
+            <h2>
+                회원 관리
+            </h2>
+
+            <button
+                class="refresh"
+                onclick="loadUsers()"
+            >
+                새로고침
+            </button>
+
+        </div>
+
+
+        <div id="userList">
+
+            <p class="empty">
+                불러오는 중...
+            </p>
+
+        </div>
+
+    </section>
+
+
+    <!-- =====================================================
+         BANNED WORDS
+    ====================================================== -->
+
+    <section>
+
+        <div class="section-header">
+
+            <h2>
+                금지어 관리
+            </h2>
+
+            <button
+                class="refresh"
+                onclick="loadBannedWords()"
+            >
+                새로고침
+            </button>
+
+        </div>
+
+
+        <p class="section-description">
+
+            금지어가 들어간 기존 기사는
+            금지어 등록 즉시 자동 삭제됩니다.
+            새 기사 작성 및 기사 수정에도
+            금지어가 적용됩니다.
+
+        </p>
+
+
+        <div class="banned-word-form">
+
+            <input
+                id="bannedWordInput"
+                type="text"
+                maxlength="100"
+                placeholder="등록할 금지어를 입력하세요"
+                autocomplete="off"
+            >
+
+
+            <button
+                class="add-banned-word"
+                onclick="addBannedWord()"
+            >
+                금지어 추가
+            </button>
+
+        </div>
+
+
+        <div id="bannedWordList">
+
+            <p class="empty">
+                불러오는 중...
+            </p>
+
+        </div>
+
+    </section>
+
+
+    <!-- =====================================================
+         ARTICLES
+    ====================================================== -->
+
+    <section>
+
+        <div class="section-header">
+
+            <h2>
+                기사 관리
+            </h2>
+
+
+            <div
+                style="
+                    display:flex;
+                    gap:8px;
+                    flex-wrap:wrap;
+                "
+            >
+
+                <button
+                    class="delete-all-btn"
+                    onclick="deleteAllArticles()"
+                >
+                    전체 기사 삭제
+                </button>
+
+
+                <button
+                    class="refresh"
+                    onclick="loadArticles()"
+                >
+                    새로고침
+                </button>
+
+            </div>
+
+        </div>
+
+
+        <div id="articleList">
+
+            <p class="empty">
+                불러오는 중...
+            </p>
+
+        </div>
+
+    </section>
+
+
+    <!-- =====================================================
+         BACK
+    ====================================================== -->
+
+    <section>
+
+        <button
+            class="back"
+            onclick="
+                location.href='index.html'
+            "
+        >
+            INKVOID로 돌아가기
+        </button>
+
+    </section>
+
+
+</main>
+
+
+<script src="admin.js"></script>
+
+
+</body>
+
+</html>

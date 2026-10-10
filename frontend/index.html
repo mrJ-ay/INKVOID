@@ -1,0 +1,54 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="theme-color" content="#f3eee4">
+  <title>INKVOID — Stories in the dark</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Noto+Serif+KR:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <header class="topbar">
+    <a class="brand" href="#" onclick="showExplore();return false"><span class="brand-mark">IV</span><span>INKVOID</span></a>
+    <nav><button class="nav-link active" id="exploreNav" onclick="showExplore()">둘러보기</button><button class="nav-link" id="libraryNav" onclick="showLibrary()">내 서재</button><button class="nav-link" onclick="newWork()">집필하기</button></nav>
+    <div class="account"><span id="userName"></span><button class="quiet-button" id="loginButton" onclick="showLogin()">로그인</button><button class="quiet-button" id="logoutButton" onclick="logout()" hidden>로그아웃</button></div>
+  </header>
+  <main>
+    <section id="explorePage" class="page">
+      <div class="hero explore-hero"><div><p class="eyebrow">INKVOID · FICTION LIBRARY</p><h1>새로운 세계를<br><em>읽어볼 시간</em></h1><p class="hero-copy">작가들이 써 내려간 이야기를 발견하고, 마음에 드는 작품에 머물러 보세요.</p><button class="primary-button" onclick="showLibrary()">내 서재 열기 <span>→</span></button></div><div class="hero-art" aria-hidden="true"><div class="sun"></div><div class="book book-back"></div><div class="book book-front"><span>아직 쓰이지<br>않은 세계</span></div><span class="spark spark-one">✳</span><span class="spark spark-two">✦</span></div></div>
+      <div class="library-head"><div><p class="eyebrow">OPEN SHELF</p><h2>이야기 둘러보기 <span id="publicCount">0</span></h2></div><div class="library-tools"><label class="searchbox"><span>⌕</span><input id="exploreSearch" placeholder="제목이나 소개 검색" oninput="renderExplore()"></label></div></div>
+      <div id="publicGrid" class="work-grid"><div class="empty-state">이야기를 불러오는 중…</div></div>
+      <footer class="footnote">좋은 이야기는 낯선 세계의 문을 열어줍니다.</footer>
+    </section>
+
+    <section id="libraryPage" class="page" hidden>
+      <div class="hero"><div><p class="eyebrow">YOUR WRITING ROOM</p><h1>이야기가 자라는<br><em>나만의 서재</em></h1><p class="hero-copy">떠오른 문장을 붙잡고, 한 장씩 이야기를 완성해 보세요.</p></div><div class="hero-art" aria-hidden="true"><div class="sun"></div><div class="book book-back"></div><div class="book book-front"><span>오늘의<br>첫 문장</span></div><span class="spark spark-one">✳</span><span class="spark spark-two">✦</span></div></div>
+      <div class="library-head"><div><p class="eyebrow">LIBRARY</p><h2>작품 서재 <span id="workCount">0</span></h2></div><div class="library-tools"><label class="searchbox"><span>⌕</span><input id="searchInput" placeholder="작품 제목 검색" oninput="renderLibrary()"></label><button class="primary-button" onclick="newWork()"><span>＋</span> 새 작품</button></div></div>
+      <div id="workGrid" class="work-grid"><div class="empty-state">서재를 불러오는 중…</div></div>
+      <footer class="footnote">천천히 써도 괜찮아요. 이야기는 자기만의 속도로 자랍니다.</footer>
+    </section>
+
+    <section id="readerPage" class="page reader-page" hidden>
+      <div class="reader-top"><button class="back-link" onclick="showExplore()">← 둘러보기</button><span class="eyebrow">INKVOID READER</span></div>
+      <div class="reader-heading"><p class="eyebrow" id="readerAuthor"></p><h1 id="readerTitle"></h1><p id="readerSummary"></p></div>
+      <div class="reader-layout"><aside class="reader-chapters"><p class="eyebrow">CONTENTS</p><h3>목차</h3><div id="readerChapterList"></div></aside><article class="reader-paper"><p class="eyebrow" id="readerOrdinal"></p><h2 id="readerChapterTitle"></h2><div id="readerBody" class="reader-body"></div><div class="reader-pagination"><button class="secondary-button" id="previousChapter" onclick="moveChapter(-1)">← 이전 회차</button><button class="primary-button" id="nextChapter" onclick="moveChapter(1)">다음 회차 →</button></div></article></div>
+    </section>
+
+    <section id="editorPage" class="page editor-page" hidden>
+      <div class="editor-top"><button class="back-link" onclick="showLibrary()">← 서재로</button><div class="save-state"><span class="save-dot"></span><span id="saveStatus">저장됨</span></div><button class="primary-button save-button" onclick="saveWork(true)">저장하기</button></div>
+      <div class="editor-heading"><div><p class="eyebrow">WRITING DESK</p><input id="workTitle" class="work-title-input" placeholder="작품 제목" maxlength="200"><input id="workSummary" class="summary-input" placeholder="짧은 소개를 적어 보세요"></div><div class="word-stat"><strong id="wordCount">0</strong><span>글자</span></div></div>
+      <div class="editor-layout">
+        <aside class="chapter-panel"><div class="panel-heading"><div><p class="eyebrow">MANUSCRIPT</p><h3>목차</h3></div><button class="icon-button" aria-label="회차 추가" title="회차 추가" onclick="addChapter()">＋</button></div><div id="chapterList" class="chapter-list"></div><div class="chapter-tip">회차를 선택해 이야기를 이어 써보세요.</div></aside>
+        <section class="writing-panel"><div class="writing-meta"><span id="chapterOrdinal">CHAPTER 01</span><span>·</span><span>초안</span></div><input id="chapterTitle" class="chapter-title-input" placeholder="이번 장의 제목"><textarea id="chapterBody" class="chapter-body" placeholder="이야기의 첫 문장을 적어 보세요.&#10;&#10;여기서는 당신의 상상력이 주인공입니다."></textarea><div class="editor-footer"><span>자동 저장 켜짐</span><span id="lastSaved"></span></div></section>
+      </div>
+    </section>
+
+    <section id="loginPage" class="page login-page" hidden><button class="back-link" onclick="showExplore()">← 둘러보기</button><div class="login-card"><div class="brand-mark large">IV</div><p class="eyebrow">INKVOID WRITER</p><h1>다시, 이야기 속으로</h1><p>로그인해서 작품을 이어 써보세요.</p><label>닉네임<input id="loginNickname" maxlength="20" placeholder="닉네임"></label><label>비밀번호<input id="loginPassword" type="password" placeholder="비밀번호"></label><button class="primary-button full-button" onclick="login()">로그인</button><button class="text-button" onclick="registerUser()">계정이 없나요? 회원가입</button></div></section>
+  </main>
+  <div id="toast" class="toast" role="status" aria-live="polite"></div>
+  <script src="script.js"></script>
+</body>
+</html>

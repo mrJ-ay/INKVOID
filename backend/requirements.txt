@@ -1,0 +1,10 @@
+fastapi
+uvicorn
+sqlalchemy
+python-jose
+pwdlib[argon2]
+bcrypt
+python-multipart
+psycopg2-binary
+supabase
+python-dotenv

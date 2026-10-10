@@ -60,21 +60,23 @@ function decodeWork(record) {
   let saved;
   try { saved = JSON.parse(record.content || ""); } catch { saved = null; }
   if (saved?.format === "fakepress-novel-v1" && Array.isArray(saved.chapters) && saved.chapters.length) {
-    return { ...record, summary: record.subtitle || "", chapters: saved.chapters, isNovel: true };
+    return { ...record, summary: record.subtitle || "", chapters: saved.chapters, isNovel: true, isPublic: saved.is_public === true };
   }
   return { ...record, summary: record.subtitle || "", chapters: [{ id: makeId(), title: "첫 번째 장", body: record.content || "" }], isNovel: false };
 }
 
 function encodeWork(work) {
-  return JSON.stringify({ format: "fakepress-novel-v1", chapters: work.chapters });
+  return JSON.stringify({ format: "fakepress-novel-v1", is_public: work.isPublic === true, chapters: work.chapters });
 }
 
 async function loadWorks() {
   try {
     const data = await request("/articles");
     const records = Array.isArray(data) ? data : (data?.articles || []);
-    allWorks = records.map(decodeWork).filter(item => item.isNovel);
-    works = allWorks.filter(item => currentUser && Number(item.owner_id) === Number(currentUser.id));
+    allWorks = records.map(decodeWork).filter(item => item.isNovel && item.isPublic);
+    let ownedRecords = [];
+    if (token()) ownedRecords = await request("/my/articles");
+    works = ownedRecords.map(decodeWork).filter(item => item.isNovel);
     renderExplore();
     renderLibrary();
   } catch (error) { notify(error.message); }
@@ -143,12 +145,12 @@ function renderLibrary() {
   grid.innerHTML = filtered.map((work, index) => {
     const total = work.chapters.reduce((sum, chapter) => sum + (chapter.body || "").length, 0);
     const date = work.updated_at ? new Date(work.updated_at).toLocaleDateString("ko-KR", { year:"numeric", month:"long", day:"numeric" }) : "방금 작성";
-    return `<article class="work-card" onclick="openWork(${Number(work.id)})"><div class="work-cover cover-${index % 5 + 1}"></div><h3>${escapeHtml(work.title || "제목 없는 작품")}</h3><p>${escapeHtml(work.summary || "아직 소개가 없어요.")}</p><div class="work-meta"><strong>${work.chapters.length}회차 · ${total.toLocaleString()}자</strong><span>${escapeHtml(date)}</span></div></article>`;
+    return `<article class="work-card" onclick="openWork(${Number(work.id)})"><div class="work-cover cover-${index % 5 + 1}"></div><h3>${escapeHtml(work.title || "제목 없는 작품")}</h3><p>${escapeHtml(work.summary || "아직 소개가 없어요.")}</p><div class="work-meta"><strong>${work.chapters.length}회차 · ${total.toLocaleString()}자</strong><span class="visibility-tag ${work.isPublic ? "published" : "draft"}">${work.isPublic ? "공개" : "초안"}</span><span>${escapeHtml(date)}</span></div></article>`;
   }).join("");
 }
 
 function freshWork(title) {
-  return { id: null, title, summary: "", author: currentUser?.nickname || "", date: new Date().toISOString().slice(0, 10), chapters: [{ id: makeId(), title: "첫 번째 장", body: "" }], isNovel: true };
+  return { id: null, title, summary: "", author: currentUser?.nickname || "", date: new Date().toISOString().slice(0, 10), chapters: [{ id: makeId(), title: "첫 번째 장", body: "" }], isNovel: true, isPublic: false };
 }
 
 async function newWork() {
@@ -162,7 +164,6 @@ async function newWork() {
     currentWork = { ...work, id:record.id, owner_id:record.owner_id, updated_at:record.updated_at };
     activeChapterId = currentWork.chapters[0].id;
     works.unshift(currentWork);
-    allWorks.unshift(currentWork);
     renderExplore();
     openEditor();
     notify("새 작품을 서재에 만들었어요.");
@@ -187,6 +188,7 @@ function openEditor() {
   if (!currentWork) return;
   showPage("editorPage");
   $("workTitle").value = currentWork.title || "";
+  $("workPublicToggle").checked = currentWork.isPublic === true;
   $("workSummary").value = currentWork.summary || "";
   renderChapters();
   renderActiveChapter();
@@ -260,8 +262,11 @@ async function saveWork(manual) {
     const index = works.findIndex(item => Number(item.id) === Number(currentWork.id));
     if (index >= 0) works[index] = JSON.parse(JSON.stringify(currentWork));
     const publicIndex = allWorks.findIndex(item => Number(item.id) === Number(currentWork.id));
-    if (publicIndex >= 0) allWorks[publicIndex] = JSON.parse(JSON.stringify(currentWork));
+    if (currentWork.isPublic && publicIndex >= 0) allWorks[publicIndex] = JSON.parse(JSON.stringify(currentWork));
+    else if (currentWork.isPublic) allWorks.unshift(JSON.parse(JSON.stringify(currentWork)));
+    else if (publicIndex >= 0) allWorks.splice(publicIndex, 1);
     renderExplore();
+    renderLibrary();
     localStorage.setItem(DRAFT_KEY, JSON.stringify(currentWork));
     $("saveStatus").textContent = "모든 변경사항 저장됨";
     $("lastSaved").textContent = `저장 ${new Date().toLocaleTimeString("ko-KR", { hour:"2-digit", minute:"2-digit" })}`;
@@ -323,6 +328,12 @@ document.addEventListener("DOMContentLoaded", async () => {
     $(id).addEventListener("input", () => { updateWordCount(); queueSave(); });
   });
   $("loginPassword").addEventListener("keydown", event => { if (event.key === "Enter") login(); });
+  $("workPublicToggle").addEventListener("change", () => {
+    if (!currentWork) return;
+    currentWork.isPublic = $("workPublicToggle").checked;
+    queueSave();
+    notify(currentWork.isPublic ? "공개 설정을 저장할게요." : "초안으로 저장할게요.");
+  });
   await checkLogin();
   await loadWorks();
   showExplore();

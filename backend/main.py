@@ -1,3 +1,4 @@
+import json
 import os
 import uuid
 
@@ -713,37 +714,64 @@ async def upload_image(
 
 
 # =========================================================
-# GET ARTICLES
+# PUBLICATION HELPERS
+# =========================================================
+
+def article_is_public(article: Article) -> bool:
+    try:
+        payload = json.loads(article.content or "")
+    except (TypeError, json.JSONDecodeError):
+        return False
+    return isinstance(payload, dict) and payload.get("is_public") is True
+
+
+def serialize_article(article: Article):
+    return {
+        "id": article.id,
+        "title": article.title,
+        "subtitle": article.subtitle,
+        "author": article.author,
+        "date": article.date,
+        "content": article.content,
+        "image": article.image,
+        "owner_id": article.owner_id,
+        "created_at": article.created_at,
+        "updated_at": article.updated_at,
+    }
+
+
+# =========================================================
+# GET PUBLIC ARTICLES
 # =========================================================
 
 @app.get("/articles")
 def get_articles(
     db: Session = Depends(get_db),
 ):
-
     articles = (
         db.query(Article)
-        .order_by(
-            Article.created_at.desc()
-        )
+        .order_by(Article.created_at.desc())
         .all()
     )
+    return [serialize_article(article) for article in articles if article_is_public(article)]
 
-    return [
-        {
-            "id": article.id,
-            "title": article.title,
-            "subtitle": article.subtitle,
-            "author": article.author,
-            "date": article.date,
-            "content": article.content,
-            "image": article.image,
-            "owner_id": article.owner_id,
-            "created_at": article.created_at,
-            "updated_at": article.updated_at,
-        }
-        for article in articles
-    ]
+
+# =========================================================
+# GET OWNER'S ARTICLES
+# =========================================================
+
+@app.get("/my/articles")
+def get_my_articles(
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    articles = (
+        db.query(Article)
+        .filter(Article.owner_id == current_user.id)
+        .order_by(Article.updated_at.desc())
+        .all()
+    )
+    return [serialize_article(article) for article in articles]
 
 
 # =========================================================
@@ -764,7 +792,7 @@ def get_article(
         .first()
     )
 
-    if not article:
+    if not article or not article_is_public(article):
 
         raise HTTPException(
             status_code=404,
@@ -1030,7 +1058,7 @@ def get_comments(
         .first()
     )
 
-    if not article:
+    if not article or not article_is_public(article):
 
         raise HTTPException(
             status_code=404,
@@ -1092,7 +1120,7 @@ def create_comment(
         .first()
     )
 
-    if not article:
+    if not article or not article_is_public(article):
 
         raise HTTPException(
             status_code=404,

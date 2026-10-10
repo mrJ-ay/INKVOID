@@ -38,7 +38,7 @@
     </section>
 
     <section id="editorPage" class="page editor-page" hidden>
-      <div class="editor-top"><button class="back-link" onclick="showLibrary()">← 서재로</button><div class="save-state"><span class="save-dot"></span><span id="saveStatus">저장됨</span></div><button class="primary-button save-button" onclick="saveWork(true)">저장하기</button></div>
+      <div class="editor-top"><button class="back-link" onclick="showLibrary()">← 서재로</button><label class="publish-control"><input id="workPublicToggle" type="checkbox"><span>둘러보기에 공개</span></label><div class="save-state"><span class="save-dot"></span><span id="saveStatus">저장됨</span></div><button class="primary-button save-button" onclick="saveWork(true)">저장하기</button></div>
       <div class="editor-heading"><div><p class="eyebrow">WRITING DESK</p><input id="workTitle" class="work-title-input" placeholder="작품 제목" maxlength="200"><input id="workSummary" class="summary-input" placeholder="짧은 소개를 적어 보세요"></div><div class="word-stat"><strong id="wordCount">0</strong><span>글자</span></div></div>
       <div class="editor-layout">
         <aside class="chapter-panel"><div class="panel-heading"><div><p class="eyebrow">MANUSCRIPT</p><h3>목차</h3></div><button class="icon-button" aria-label="회차 추가" title="회차 추가" onclick="addChapter()">＋</button></div><div id="chapterList" class="chapter-list"></div><div class="chapter-tip">회차를 선택해 이야기를 이어 써보세요.</div></aside>

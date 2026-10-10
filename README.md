@@ -20,3 +20,7 @@ Set `DATABASE_URL` to the connection string for the INKVOID Neon project. Keep t
 ## GitHub
 
 The repository is public. The ignore rules exclude `.env`, local databases, uploads, and Python cache files. Run `push.bat` from this folder to publish changes.
+
+## Publication
+
+New stories are private drafts by default. Authors can publish or unpublish them from the writing editor. Public endpoints and comments only expose published stories; owners can see all their own drafts in the library.

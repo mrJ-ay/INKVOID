@@ -1,30 +1,22 @@
 # INKVOID
 
-INKVOID is a fiction writing site with a public story shelf, chapter reader, and author library. The frontend talks only to the INKVOID API. It does not use the FAKEPRESS API.
+INKVOID is an independent fiction writing site with a public story shelf, chapter reader, and author library. It uses its own FastAPI backend and database; it does not use the FAKEPRESS API or database.
 
 ## Local development
 
 1. Install Python 3.11 or newer.
 2. In `backend`, install the packages from `requirements.txt`.
-3. Copy `.env.example` to `.env`. Leave `DATABASE_URL` blank for a local SQLite database, or set it to a Supabase Postgres connection string.
-4. The local development key is used automatically. Set a private `SECRET_KEY` before deploying; set `ENVIRONMENT=production` on the host.
+3. Copy `.env.example` to `.env`. Leave `DATABASE_URL` blank to use local SQLite, or set it to the PostgreSQL connection string for the INKVOID Neon project.
+4. Set a private `SECRET_KEY` before deployment. Set `ENVIRONMENT=production` on the host and `CORS_ORIGINS` to the deployed frontend URL.
 5. Start the API from `backend` with `python -m uvicorn main:app --reload`.
-6. Open `frontend/index.html` in a browser. The frontend uses `http://127.0.0.1:8000` by default.
+6. Open `frontend/index.html` in a browser. It uses `http://127.0.0.1:8000` by default; the deployed API URL is injected into `frontend/api-config.js` at build time.
 
-The local database is created as `backend/inkvoid.db` and is ignored by Git. Existing FAKEPRESS database files are not used.
+The local database is created as `backend/inkvoid.db` and is ignored by Git. Existing FAKEPRESS database files are not used. SQLAlchemy creates the application tables when the API starts.
 
-## Supabase setup
+## Neon
 
-Create a separate Supabase project for INKVOID. Set these values in the backend environment (or the ignored local `.env` file):
-
-- `DATABASE_URL`: the Postgres connection string copied from the project's **Connect** dialog. For a persistent backend, use a direct or session-pooler connection that matches the host's IP support.
-- `SUPABASE_URL`: the new project's URL.
-- `SUPABASE_SERVICE_ROLE_KEY`: a server-only key for image uploads. Never put it in frontend files or commit it.
-- `SUPABASE_STORAGE_BUCKET`: public Storage bucket name; defaults to `inkvoid-images`.
-- `SECRET_KEY`: a unique random signing key for INKVOID. Required in production.
-
-Create the Storage bucket named in `SUPABASE_STORAGE_BUCKET` and make it public so uploaded story images can be read. SQLAlchemy creates the application tables when the API starts.
+Set `DATABASE_URL` to the connection string for the INKVOID Neon project. Keep the connection string and `SECRET_KEY` in the hosting provider's secret environment variables. Never commit them or place them in frontend files. The `inkvoid-images` object storage bucket is currently private and is not yet wired into the app's image upload flow.
 
 ## GitHub
 
-Before the first push, create or connect the INKVOID GitHub repository, then run `push.bat` from this folder. The ignore rules exclude `.env`, local databases, uploads, and Python cache files.
+The repository is public. The ignore rules exclude `.env`, local databases, uploads, and Python cache files. Run `push.bat` from this folder to publish changes.

@@ -15,55 +15,33 @@ const currentUser =
     );
 
 
+const ONEID_API_URL =
+    window.ONEID_API_URL ||
+    "http://127.0.0.1:8000";
+
+const oneidAdminTokenKey =
+    "oneid_admin_access_token";
+
+const hasLocalSiteAdmin =
+    Boolean(token && currentUser && Number(currentUser.is_admin) === 1);
+
 // =========================================================
 // 로그인 확인
 // =========================================================
 
-if (
-    !token ||
-    !currentUser
-) {
-
-    alert(
-        "로그인이 필요합니다."
-    );
-
-    location.href =
-        "index.html";
-
-}
-else if (
-    Number(
-        currentUser.is_admin
-    ) !== 1
-) {
-
-    alert(
-        "관리자만 접근할 수 있습니다."
-    );
-
-    location.href =
-        "index.html";
-
-}
-else {
-
-    const nicknameElement =
-        document.getElementById(
-            "adminNickname"
-        );
-
-    if (nicknameElement) {
-
-        nicknameElement.textContent =
-            `${currentUser.nickname} 관리자`;
-
-    }
-
+if (hasLocalSiteAdmin) {
+    const nicknameElement = document.getElementById("adminNickname");
+    if (nicknameElement) nicknameElement.textContent = `${currentUser.nickname} 관리자`;
     loadUsers();
     loadBannedWords();
     loadArticles();
+} else {
+    document.querySelectorAll("main > section:not(#oneidAdminPanel)").forEach((section) => {
+        section.hidden = true;
+    });
 }
+
+initializeOneIDAdmin();
 
 
 // =========================================================
@@ -71,17 +49,15 @@ else {
 // =========================================================
 
 function getHeaders() {
-
-    return {
-
+    const headers = {
         "Authorization":
             `Bearer ${token}`,
-
         "Content-Type":
             "application/json"
-
     };
-
+    const oneidToken = sessionStorage.getItem(oneidAdminTokenKey);
+    if (oneidToken) headers["X-ONEID-Authorization"] = `Bearer ${oneidToken}`;
+    return headers;
 }
 
 
@@ -119,6 +95,131 @@ function showMessage(
         3000
     );
 
+}
+
+
+// =========================================================
+// ONEID GLOBAL ACCOUNT MANAGEMENT
+// =========================================================
+
+function oneidHeaders() {
+    const accessToken = sessionStorage.getItem(oneidAdminTokenKey);
+    return {
+        "Authorization": `Bearer ${accessToken}`,
+        "Content-Type": "application/json"
+    };
+}
+
+function setOneIDMessage(message) {
+    const element = document.getElementById("oneidMessage");
+    if (element) element.textContent = message || "";
+}
+
+function showOneIDAdminSession(user) {
+    document.getElementById("oneidLoginForm").hidden = true;
+    document.getElementById("oneidSession").hidden = false;
+    document.getElementById("oneidRefreshButton").hidden = false;
+    document.getElementById("oneidAdminLabel").textContent = `${user.nickname} (ONEID 관리자)`;
+    const nicknameElement = document.getElementById("adminNickname");
+    if (nicknameElement && !hasLocalSiteAdmin) nicknameElement.textContent = `${user.nickname} ONEID 관리자`;
+    if (token) {
+        document.querySelectorAll("main > section:not(#oneidAdminPanel)").forEach(section => { section.hidden = false; });
+        loadUsers();
+        loadBannedWords();
+        loadArticles();
+    }
+}
+
+function showOneIDLogin() {
+    document.getElementById("oneidLoginForm").hidden = false;
+    document.getElementById("oneidSession").hidden = true;
+    document.getElementById("oneidRefreshButton").hidden = true;
+    document.getElementById("oneidUserList").innerHTML =
+        "<p class='empty'>ONEID 관리자 로그인 후 계정 목록을 볼 수 있습니다.</p>";
+}
+
+async function initializeOneIDAdmin() {
+    const accessToken = sessionStorage.getItem(oneidAdminTokenKey);
+    if (!accessToken) {
+        showOneIDLogin();
+        return;
+    }
+
+    try {
+        const response = await fetch(`${ONEID_API_URL}/api/auth/me`, {
+            headers: { "Authorization": `Bearer ${accessToken}` }
+        });
+        const user = await response.json();
+        if (!response.ok || !user.is_admin) {
+            throw new Error(user.detail || "ONEID 관리자 권한이 필요합니다.");
+        }
+        showOneIDAdminSession(user);
+        await loadOneIDUsers();
+    } catch (error) {
+        sessionStorage.removeItem(oneidAdminTokenKey);
+        showOneIDLogin();
+        setOneIDMessage(error.message || "ONEID 관리자 확인에 실패했습니다.");
+    }
+}
+
+function oneidAdminLogout() {
+    sessionStorage.removeItem(oneidAdminTokenKey);
+    showOneIDLogin();
+    setOneIDMessage("ONEID에서 로그아웃했습니다.");
+}
+
+async function loadOneIDUsers() {
+    setOneIDMessage("ONEID 계정 목록을 불러오는 중...");
+    try {
+        const response = await fetch(`${ONEID_API_URL}/api/admin/users`, {
+            headers: oneidHeaders()
+        });
+        const data = await response.json();
+        if (!response.ok) throw new Error(data.detail || "계정 목록을 불러오지 못했습니다.");
+        renderOneIDUsers(data);
+        setOneIDMessage("");
+    } catch (error) {
+        setOneIDMessage(error.message || "계정 목록을 불러오지 못했습니다.");
+    }
+}
+
+function renderOneIDUsers(users) {
+    const list = document.getElementById("oneidUserList");
+    if (!users.length) {
+        list.innerHTML = "<p class='empty'>등록된 ONEID 계정이 없습니다.</p>";
+        return;
+    }
+    list.innerHTML = users.map((user) => {
+        const isAdmin = user.role === "admin";
+        const safeId = escapeHtml(String(user.id));
+        return `
+            <div class="article-row">
+                <div class="article-info">
+                    <div class="article-title">${escapeHtml(user.nickname)}</div>
+                    <div class="article-meta">사용자명: ${escapeHtml(user.username)} &nbsp; | &nbsp; ID: ${safeId} &nbsp; | &nbsp; ${isAdmin ? '<span class="status-admin">전체 관리자</span>' : "일반 계정"}</div>
+                </div>
+                <button class="${isAdmin ? "remove-admin" : "admin"}" type="button"
+                    onclick="toggleOneIDRole('${safeId}', ${!isAdmin})">
+                    ${isAdmin ? "관리자 해제" : "전체 관리자 지정"}
+                </button>
+            </div>`;
+    }).join("");
+}
+
+async function toggleOneIDRole(userId, makeAdmin) {
+    if (!confirm(makeAdmin ? "이 계정을 모든 ONEID 연결 사이트의 관리자로 지정할까요?" : "이 계정의 전체 사이트 관리자 권한을 해제할까요?")) return;
+    try {
+        const response = await fetch(`${ONEID_API_URL}/api/admin/users/${encodeURIComponent(userId)}/role`, {
+            method: "PATCH",
+            headers: oneidHeaders(),
+            body: JSON.stringify({ role: makeAdmin ? "admin" : "user" })
+        });
+        const data = await response.json();
+        if (!response.ok) throw new Error(data.detail || "ONEID 권한 변경에 실패했습니다.");
+        await loadOneIDUsers();
+    } catch (error) {
+        setOneIDMessage(error.message || "ONEID 권한 변경에 실패했습니다.");
+    }
 }
 
 
@@ -249,7 +350,7 @@ function renderUser(
 
                     ${
                         isAdmin
-                            ? '<span class="status-admin">관리자</span>'
+                            ? '<span class="status-admin">ONEID 관리자</span>'
                             : "일반 사용자"
                     }
 
@@ -293,25 +394,7 @@ function renderUser(
                 </button>
 
 
-                <button
-                    class="${
-                        isAdmin
-                            ? "remove-admin"
-                            : "admin"
-                    }"
-                    onclick="
-                        toggleAdmin(
-                            ${user.id},
-                            ${isAdmin}
-                        )
-                    "
-                >
-                    ${
-                        isAdmin
-                            ? "관리자 해제"
-                            : "관리자 지정"
-                    }
-                </button>
+                
 
             </div>
 

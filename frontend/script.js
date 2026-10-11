@@ -1,5 +1,10 @@
 const API_URL = window.INKVOID_API_URL || "http://127.0.0.1:8000";
+const ONEID_API_URL = window.ONEID_API_URL || "http://127.0.0.1:8000";
+const ONEID_CLIENT_ID = window.ONEID_CLIENT_ID || "inkvoid";
 const TOKEN_KEY = "inkvoid_token";
+const ONEID_VERIFIER_KEY = "inkvoid_oneid_verifier";
+const ONEID_STATE_KEY = "inkvoid_oneid_state";
+const ONEID_PENDING_TOKEN_KEY = "inkvoid_oneid_pending_token";
 const DRAFT_KEY = "inkvoid_writer_draft_v1";
 let works = [];
 let allWorks = [];
@@ -54,7 +59,7 @@ function showExplore() {
   renderExplore();
 }
 
-function showLogin() { showPage("loginPage"); }
+function showLogin() { beginOneIDLogin(); }
 
 async function showAdmin() {
   if (!token()) { showLogin(); notify("관리자 로그인 후 이용할 수 있어요."); return; }
@@ -488,27 +493,79 @@ async function saveWork(manual) {
   }
 }
 
-async function registerUser() {
-  const nickname = $("loginNickname").value.trim();
-  const password = $("loginPassword").value;
-  if (!nickname || !password) { notify("닉네임과 비밀번호를 입력해 주세요."); return; }
-  try { const result = await request("/auth/register", { method:"POST", body:JSON.stringify({ nickname, password }) }); notify(result?.message || "가입이 완료됐어요. 로그인해 주세요."); }
-  catch (error) { notify(error.message); }
+function base64Url(bytes) { return btoa(String.fromCharCode(...new Uint8Array(bytes))).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/g, ""); }
+
+async function beginOneIDLogin() {
+  const verifier = base64Url(crypto.getRandomValues(new Uint8Array(32)));
+  const state = base64Url(crypto.getRandomValues(new Uint8Array(24)));
+  const digest = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(verifier));
+  const redirectUri = `${location.origin}/`;
+  sessionStorage.setItem(ONEID_VERIFIER_KEY, verifier);
+  sessionStorage.setItem(ONEID_STATE_KEY, state);
+  const query = new URLSearchParams({ client_id: ONEID_CLIENT_ID, redirect_uri: redirectUri, code_challenge: base64Url(digest), state });
+  location.assign(`${ONEID_API_URL}/login.html?${query}`);
 }
 
-async function login() {
-  const nickname = $("loginNickname").value.trim();
-  const password = $("loginPassword").value;
-  if (!nickname || !password) { notify("닉네임과 비밀번호를 입력해 주세요."); return; }
+function showOneIDMigration(message) {
+  $("oneidMigrationPanel").hidden = false;
+  $("oneidLoginStatus").textContent = message || "기존 계정을 이어 붙이거나 새 계정을 만들 수 있습니다.";
+  showPage("loginPage");
+}
+
+async function completeOneIDChoice(choice) {
+  const oneidToken = sessionStorage.getItem(ONEID_PENDING_TOKEN_KEY);
+  if (!oneidToken) { showOneIDMigration("ONEID 로그인이 만료됐어요. 다시 로그인해 주세요."); return; }
+  const payload = choice === "new" ? { create_new: true } : {
+    legacy_nickname: $("legacyNickname").value.trim(), legacy_password: $("legacyPassword").value,
+  };
   try {
-    const result = await request("/auth/login", { method:"POST", body:JSON.stringify({ nickname, password }) });
-    localStorage.setItem(TOKEN_KEY, result.access_token || result.token);
+    const response = await fetch(`${API_URL}/auth/oneid/complete`, { method:"POST", headers:{ Authorization:`Bearer ${oneidToken}`, "Content-Type":"application/json" }, body:JSON.stringify(payload) });
+    let result = {};
+    try { result = await response.json(); } catch {}
+    if (!response.ok) throw new Error(result.detail || "사이트 계정을 연결하지 못했어요.");
+    localStorage.setItem(TOKEN_KEY, result.access_token);
+    sessionStorage.removeItem(ONEID_PENDING_TOKEN_KEY);
+    $("legacyPassword").value = "";
     await checkLogin();
     await loadWorks();
     showLibrary();
-    notify("로그인했어요. 이어서 써볼까요?");
-  } catch (error) { notify(error.message); }
+  } catch (error) { $("oneidLoginStatus").textContent = error.message; }
 }
+
+async function handleOneIDCallback() {
+  const params = new URLSearchParams(location.search);
+  const code = params.get("code");
+  if (!code) return;
+  const state = params.get("state");
+  const expectedState = sessionStorage.getItem(ONEID_STATE_KEY);
+  const verifier = sessionStorage.getItem(ONEID_VERIFIER_KEY);
+  history.replaceState(null, "", `${location.pathname}${location.hash}`);
+  sessionStorage.removeItem(ONEID_STATE_KEY);
+  sessionStorage.removeItem(ONEID_VERIFIER_KEY);
+  if (!state || state !== expectedState || !verifier) { showOneIDMigration("로그인 연결을 확인하지 못했어요. 다시 시도해 주세요."); return; }
+  const response = await fetch(`${ONEID_API_URL}/api/oauth/token`, { method:"POST", headers:{"Content-Type":"application/json"}, body:JSON.stringify({ client_id:ONEID_CLIENT_ID, redirect_uri:`${location.origin}/`, code, code_verifier:verifier }) });
+  let session = {};
+  try { session = await response.json(); } catch {}
+  if (!response.ok || !session.access_token) { showOneIDMigration(session.detail || "ONEID 로그인을 완료하지 못했습니다."); return; }
+  sessionStorage.setItem(ONEID_PENDING_TOKEN_KEY, session.access_token);
+  sessionStorage.setItem("oneid_admin_access_token", session.access_token);
+  const complete = await fetch(`${API_URL}/auth/oneid/complete`, { method:"POST", headers:{"Authorization":`Bearer ${session.access_token}`,"Content-Type":"application/json"}, body:"{}" });
+  let result = {};
+  try { result = await complete.json(); } catch {}
+  if (!complete.ok) {
+    if (result.detail === "ONEID_ACCOUNT_CHOICE_REQUIRED") { showOneIDMigration(); return; }
+    showOneIDMigration(result.detail || "사이트 로그인을 완료하지 못했습니다.");
+    return;
+  }
+  localStorage.setItem(TOKEN_KEY, result.access_token);
+  sessionStorage.removeItem(ONEID_PENDING_TOKEN_KEY);
+  await checkLogin();
+  await loadWorks();
+  showLibrary();
+}
+
+function linkLegacyAccount() { return completeOneIDChoice("legacy"); }
+function createOneIDSiteAccount() { return completeOneIDChoice("new"); }
 
 async function checkLogin() {
   if (!token()) return;
@@ -528,6 +585,8 @@ async function checkLogin() {
 function logout() {
   localStorage.removeItem(TOKEN_KEY);
   localStorage.removeItem("inkvoid_current_user");
+  sessionStorage.removeItem("oneid_admin_access_token");
+  sessionStorage.removeItem(ONEID_PENDING_TOKEN_KEY);
   currentUser = null; works = []; currentWork = null;
   $("userName").textContent = ""; $("loginButton").hidden = false; $("logoutButton").hidden = true;
   $("adminNav").hidden = true;
@@ -538,7 +597,6 @@ document.addEventListener("DOMContentLoaded", async () => {
   ["workTitle", "workSummary", "chapterTitle", "chapterBody"].forEach(id => {
     $(id).addEventListener("input", () => { updateWordCount(); queueSave(); });
   });
-  $("loginPassword").addEventListener("keydown", event => { if (event.key === "Enter") login(); });
   $("bannerFile").addEventListener("change", event => uploadBanner(event.target.files?.[0]));
   $("workPublicToggle").addEventListener("change", () => {
     if (!currentWork) return;
@@ -546,9 +604,10 @@ document.addEventListener("DOMContentLoaded", async () => {
     queueSave();
     notify(currentWork.isPublic ? "공개 설정을 저장할게요." : "초안으로 저장할게요.");
   });
+  try { await handleOneIDCallback(); } catch (error) { showOneIDMigration(error?.message || "ONEID 연결 중 오류가 발생했습니다. 다시 로그인해 주세요."); }
   await checkLogin();
   await loadWorks();
   showExplore();
 });
 
-Object.assign(window, { showExplore, showLibrary, showLogin, showAdmin, loadAdminData, adminUserAction, adminDeleteArticle, adminAddBannedWord, adminDeleteBannedWord, newWork, openWork, selectChapter, addChapter, saveWork, openReader, selectReaderChapter, moveChapter, toggleLike, submitComment, deleteComment, login, registerUser, logout, uploadBanner });
+Object.assign(window, { showExplore, showLibrary, showLogin, beginOneIDLogin, linkLegacyAccount, createOneIDSiteAccount, showAdmin, loadAdminData, adminUserAction, adminDeleteArticle, adminAddBannedWord, adminDeleteBannedWord, newWork, openWork, selectChapter, addChapter, saveWork, openReader, selectReaderChapter, moveChapter, toggleLike, submitComment, deleteComment, logout, uploadBanner });

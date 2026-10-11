@@ -50,6 +50,15 @@ class User(Base):
     )
 
 
+class OneIDLink(Base):
+    __tablename__ = "oneid_links"
+
+    id = Column(Integer, primary_key=True, index=True)
+    oneid_user_id = Column(String(36), unique=True, nullable=False, index=True)
+    user_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), unique=True, nullable=False, index=True)
+    created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+
+
 class Article(Base):
     __tablename__ = "articles"
 

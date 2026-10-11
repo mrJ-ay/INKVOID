@@ -14,7 +14,7 @@
   <header class="topbar">
     <a class="brand" href="#" onclick="showExplore();return false"><span class="brand-mark">IV</span><span>INKVOID</span></a>
     <nav><button class="nav-link active" id="exploreNav" onclick="showExplore()">둘러보기</button><button class="nav-link" id="libraryNav" onclick="showLibrary()">내 서재</button><button class="nav-link" onclick="newWork()">집필하기</button><button class="nav-link admin-nav" id="adminNav" onclick="showAdmin()" hidden>관리자</button></nav>
-    <div class="account"><span id="userName"></span><button class="quiet-button" id="loginButton" onclick="showLogin()">로그인</button><button class="quiet-button" id="logoutButton" onclick="logout()" hidden>로그아웃</button></div>
+    <div class="account"><span id="userName"></span><button class="quiet-button" id="loginButton" onclick="beginOneIDLogin()">ONEID 로그인</button><button class="quiet-button" id="logoutButton" onclick="logout()" hidden>로그아웃</button></div>
   </header>
   <main>
     <section id="explorePage" class="page">
@@ -50,7 +50,7 @@
       </div>
     </section>
 
-    <section id="loginPage" class="page login-page" hidden><button class="back-link" onclick="showExplore()">← 둘러보기</button><div class="login-card"><div class="brand-mark large">IV</div><p class="eyebrow">INKVOID WRITER</p><h1>다시, 이야기 속으로</h1><p>로그인해서 작품을 이어 써보세요.</p><label>닉네임<input id="loginNickname" maxlength="20" placeholder="닉네임"></label><label>비밀번호<input id="loginPassword" type="password" placeholder="비밀번호"></label><button class="primary-button full-button" onclick="login()">로그인</button><button class="text-button" onclick="registerUser()">계정이 없나요? 회원가입</button></div></section>
+    <section id="loginPage" class="page login-page" hidden><button class="back-link" onclick="showExplore()">← 둘러보기</button><div class="login-card"><div class="brand-mark large">IV</div><p class="eyebrow">INKVOID WRITER</p><h1>다시, 이야기 속으로</h1><p>ONEID 공통 계정으로 로그인하세요.</p><button class="primary-button full-button" onclick="beginOneIDLogin()">ONEID로 로그인</button><section id="oneidMigrationPanel" hidden><hr><h2>기존 INKVOID 계정 연결</h2><p>이전 작품을 이어 쓰려면 예전 INKVOID 닉네임과 비밀번호를 한 번 입력하세요. 이 정보는 확인 후 저장하지 않습니다.</p><label>기존 닉네임<input id="legacyNickname" maxlength="20" autocomplete="username"></label><label>기존 비밀번호<input id="legacyPassword" type="password" autocomplete="current-password"></label><button class="secondary-button" onclick="linkLegacyAccount()">기존 계정 연결</button><button class="secondary-button" onclick="createOneIDSiteAccount()">새 INKVOID 계정으로 시작</button><p id="oneidLoginStatus" role="status" aria-live="polite"></p></section></div></section>
 
     <section id="adminPage" class="page admin-page" hidden>
       <div class="admin-heading"><div><p class="eyebrow">INKVOID CONTROL ROOM</p><h1>관리자 대시보드</h1><p>회원과 작품, 서비스 운영 규칙을 관리합니다.</p></div><button class="secondary-button" onclick="loadAdminData()">새로고침 ↻</button></div>
@@ -63,6 +63,7 @@
   </main>
   <div id="toast" class="toast" role="status" aria-live="polite"></div>
   <script src="api-config.js"></script>
+  <script src="oneid-config.js"></script>
   <script src="script.js"></script>
 </body>
 </html>

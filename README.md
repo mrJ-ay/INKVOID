@@ -8,8 +8,14 @@ INKVOID is an independent fiction writing site with a public story shelf, chapte
 2. In `backend`, install the packages from `requirements.txt`.
 3. Copy `.env.example` to `.env`. Leave `DATABASE_URL` blank to use local SQLite, or set it to the PostgreSQL connection string for the INKVOID Neon project.
 4. Set a private `SECRET_KEY` before deployment. Set `ENVIRONMENT=production` on the host and `CORS_ORIGINS` to the deployed frontend URL.
-5. Start the API from `backend` with `python -m uvicorn main:app --reload`.
-6. Open `frontend/index.html` in a browser. It uses `http://127.0.0.1:8000` by default; the deployed API URL is injected into `frontend/api-config.js` at build time.
+5. Start the API from `backend` with `python -m uvicorn main:app --reload --port 8001`.
+6. Serve `frontend` at `http://localhost:5501/` (the SSO callback is registered to that origin); set the deployed API URL in `frontend/api-config.js` for production.
+
+## ONEID account linking
+
+An existing INKVOID user can sign in locally, then open the login screen's ONEID section and authenticate their ONEID account to link the two identities. The ONEID nickname becomes the INKVOID nickname when it is available. The site stores the ONEID user ID in `oneid_links`; it never stores the ONEID password or access token.
+
+Set backend `ONEID_API_URL` to the ONEID API on port 8000. Production URLs must use HTTPS. Set frontend `oneid-config.js` to the same ONEID API URL, and add the deployed INKVOID frontend origin and callback URL to ONEID's `ONEID_ALLOWED_ORIGINS` and `ONEID_CLIENT_REDIRECT_URIS`. Linked-account admin routes verify the ONEID bearer token live; the admin page receives it from the site's SSO session.
 
 The local database is created as `backend/inkvoid.db` and is ignored by Git. Existing FAKEPRESS database files are not used. SQLAlchemy creates the application tables when the API starts.
 

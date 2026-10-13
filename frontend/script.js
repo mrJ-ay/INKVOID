@@ -27,6 +27,8 @@ async function request(path, options = {}) {
   const headers = { ...(options.headers || {}) };
   if (options.body && !headers["Content-Type"]) headers["Content-Type"] = "application/json";
   if (token()) headers.Authorization = `Bearer ${token()}`;
+  const oneidToken = sessionStorage.getItem("oneid_admin_access_token");
+  if (oneidToken) headers["X-ONEID-Authorization"] = `Bearer ${oneidToken}`;
   const response = await fetch(`${API_URL}${path}`, { ...options, headers });
   let data = null;
   try { data = await response.json(); } catch {}
@@ -524,6 +526,7 @@ async function completeOneIDChoice(choice) {
     try { result = await response.json(); } catch {}
     if (!response.ok) throw new Error(result.detail || "사이트 계정을 연결하지 못했어요.");
     localStorage.setItem(TOKEN_KEY, result.access_token);
+    sessionStorage.setItem("oneid_admin_access_token", oneidToken);
     sessionStorage.removeItem(ONEID_PENDING_TOKEN_KEY);
     $("legacyPassword").value = "";
     await checkLogin();
@@ -571,12 +574,14 @@ async function checkLogin() {
   if (!token()) return;
   try {
     currentUser = await request("/auth/me");
+    localStorage.setItem("inkvoid_current_user", JSON.stringify(currentUser));
     $("userName").textContent = currentUser.nickname || "작가";
     $("loginButton").hidden = true;
     $("logoutButton").hidden = false;
     $("adminNav").hidden = currentUser.is_admin !== 1;
   } catch {
     localStorage.removeItem(TOKEN_KEY);
+    localStorage.removeItem("inkvoid_current_user");
     currentUser = null;
     $("adminNav").hidden = true;
   }

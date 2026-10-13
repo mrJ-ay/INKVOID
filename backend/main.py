@@ -314,18 +314,13 @@ def get_admin_user(
     current_user: User = Depends(
         get_current_user
     ),
-    db: Session = Depends(get_db),
-    oneid_authorization: str | None = Header(default=None, alias="X-ONEID-Authorization"),
 ):
-
-    link = db.query(OneIDLink).filter(OneIDLink.user_id == current_user.id).first()
-    if link:
-        oneid_user = verify_oneid_access_token(oneid_authorization)
-        if str(oneid_user["id"]) != link.oneid_user_id or not oneid_user.get("is_admin"):
-            raise HTTPException(status_code=403, detail="ONEID 관리자 권한이 필요합니다.")
-        return current_user
-
-    raise HTTPException(status_code=403, detail="ONEID에 연결된 계정에 관리자 권한이 필요합니다.")
+    if current_user.is_admin != 1:
+        raise HTTPException(
+            status_code=403,
+            detail="ONEID 관리자 권한이 필요합니다.",
+        )
+    return current_user
 
 
 # =========================================================
@@ -625,10 +620,20 @@ def login(
 
 @app.get("/auth/me")
 def me(
-    current_user: User = Depends(
-        get_current_user
-    ),
+    current_user: User = Depends(get_current_user),
+    oneid_authorization: str | None = Header(default=None, alias="X-ONEID-Authorization"),
+    db: Session = Depends(get_db),
 ):
+    if oneid_authorization:
+        try:
+            oneid_user = verify_oneid_access_token(oneid_authorization)
+            expected_admin = 1 if oneid_user.get("is_admin") else 0
+            if current_user.is_admin != expected_admin:
+                current_user.is_admin = expected_admin
+                db.commit()
+                db.refresh(current_user)
+        except Exception:
+            pass
 
     return {
         "id": current_user.id,
@@ -723,10 +728,13 @@ def complete_oneid_login(
             db.add(user)
             db.flush()
             db.add(OneIDLink(oneid_user_id=oneid_user_id, user_id=user.id))
-    else:
-        if user.is_banned == 1:
-            raise HTTPException(status_code=403, detail="이 사이트에서 이용 정지된 계정입니다.")
-        user.is_admin = 1 if oneid_user.get("is_admin") else 0
+
+    if user.is_banned == 1:
+        raise HTTPException(status_code=403, detail="이 사이트에서 이용 정지된 계정입니다.")
+
+    expected_admin = 1 if oneid_user.get("is_admin") else 0
+    if user.is_admin != expected_admin:
+        user.is_admin = expected_admin
 
     try:
         db.commit()

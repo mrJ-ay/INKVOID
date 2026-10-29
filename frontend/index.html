@@ -13,7 +13,7 @@
 <body>
   <header class="topbar">
     <a class="brand" href="#" onclick="showExplore();return false"><span class="brand-mark">IV</span><span>INKVOID</span></a>
-    <nav><button class="nav-link active" id="exploreNav" onclick="showExplore()">둘러보기</button><button class="nav-link" id="libraryNav" onclick="showLibrary()">내 서재</button><button class="nav-link" onclick="newWork()">집필하기</button><button class="nav-link admin-nav" id="adminNav" onclick="showAdmin()" hidden>관리자</button></nav>
+    <nav><button class="nav-link active" id="exploreNav" onclick="showExplore()">둘러보기</button><button class="nav-link" id="libraryNav" onclick="showLibrary()">내 서재</button><button class="nav-link" onclick="newWork()">집필하기</button><button class="nav-link" onclick="window.open('https://oneid-helpdesk.onrender.com/?service=INKVOID','_blank')">고객센터</button><button class="nav-link admin-nav" id="adminNav" onclick="showAdmin()" hidden>관리자</button></nav>
     <div class="account"><span id="userName"></span><button class="quiet-button" id="loginButton" onclick="beginOneIDLogin()">ONEID 로그인</button><button class="quiet-button" id="logoutButton" onclick="logout()" hidden>로그아웃</button></div>
   </header>
   <main>
